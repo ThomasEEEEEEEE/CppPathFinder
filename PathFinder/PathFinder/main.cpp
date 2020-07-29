@@ -1,5 +1,6 @@
 #define OLC_PGE_APPLICATION
 #include <vector>
+#include <algorithm>
 using std::vector;
 #include "olcPixelGameEngine.h"
 
@@ -8,7 +9,8 @@ enum TileState
 	EMPTY = 0,
 	START,
 	BLOCKED,
-	END
+	END,
+	PATHED
 };
 
 class Tile
@@ -55,7 +57,7 @@ public:
 	{
 		for (int i = 0; i < MapWidth * MapHeight; ++i)
 		{
-			Map.push_back(Tile(i % MapWidth, i % MapHeight, EMPTY));
+			Map.push_back(Tile(i % MapWidth, i / MapWidth, EMPTY));
 		}
 		return true;
 	}
@@ -74,7 +76,9 @@ public:
 				StartTile = &Map[index];
 
 				if (StartTile && EndTile)
+				{
 					DoAStar();
+				}
 			}
 			else if (GetMouse(1).bPressed)
 			{
@@ -83,32 +87,64 @@ public:
 				EndTile = &Map[index];
 
 				if (StartTile && EndTile)
+				{
 					DoAStar();
+				}
 			}
 		}
 		else if (GetMouse(0).bPressed)
 		{
 			int index = (GetMouseY() / TileSize) * MapWidth + (GetMouseX() / TileSize);
-			if (Map[index].state % 2 == 0) //Only change state if not start or end
-				Map[index].state = static_cast<TileState>((Map[index].state + 2) % 4);
+
+			if (Map[index].state == EMPTY || Map[index].state == PATHED)
+				Map[index].state = BLOCKED;
+			else if (Map[index].state == BLOCKED)
+				Map[index].state = EMPTY;
+
+			if (StartTile && EndTile)
+			{
+				DoAStar();
+			}
 		}
 
 		for (int i = 0; i < MapWidth; ++i)
 		{
 			for (int j = 0; j < MapHeight; ++j)
 			{
-				if (Map[j * MapWidth + i].state == EMPTY)
+				switch (Map[j * MapWidth + i].state)
+				{
+				case EMPTY:
 					FillRect(i * TileSize + 2, j * TileSize + 2, TileSize - 4, TileSize - 4, olc::BLUE);
-				else if (Map[j * MapWidth + i].state == BLOCKED)
+					break;
+				case BLOCKED:
 					FillRect(i * TileSize + 2, j * TileSize + 2, TileSize - 4, TileSize - 4, olc::GREY);
-				else if (Map[j * MapWidth + i].state == START)
+					break;
+				case START:
 					FillRect(i * TileSize + 2, j * TileSize + 2, TileSize - 4, TileSize - 4, olc::GREEN);
-				else if (Map[j * MapWidth + i].state == END)
+					break;
+				case END:
 					FillRect(i * TileSize + 2, j * TileSize + 2, TileSize - 4, TileSize - 4, olc::RED);
+					break;
+				case PATHED:
+					FillRect(i * TileSize + 2, j * TileSize + 2, TileSize - 4, TileSize - 4, olc::YELLOW);
+					break;
+				default:
+					FillRect(i * TileSize + 2, j * TileSize + 2, TileSize - 4, TileSize - 4, olc::DARK_MAGENTA);
+					break;
+				}
 			}
 		}
 
 		return true;
+	}
+
+	void DrawPath(vector<Tile*> Path)
+	{
+		for (Tile* t : Path)
+		{
+			if (t->state != START && t->state != END) 
+				t->state = PATHED;
+		}
 	}
 
 	void ClearMap()
@@ -116,17 +152,18 @@ public:
 		for (int i = 0; i < MapWidth * MapHeight; ++i)
 		{
 			Map[i].g = 1;
-			Map[i].f = 0;
+			Map[i].f = INT_MAX;
 			Map[i].h = 0;
 			Map[i].parent = nullptr;
+			if (Map[i].state == PATHED) Map[i].state = EMPTY;
 		}
 	}
 
-	vector<Tile> DoAStar()
+	vector<Tile*> DoAStar()
 	{
 		auto GetDistance = [](Tile* a, Tile* b)
 		{
-			return sqrtf((a->x - b->x) * (a->x - b->x) + (a->y - b->y) * (a->y - b->y));
+			return abs(a->x - b->x) + abs(a->y - b->y);
 		};
 
 		ClearMap();
@@ -137,13 +174,13 @@ public:
 
 		OpenList.push_back(StartTile);
 
-		while (OpenList.size > 0)
+		while (OpenList.size() > 0)
 		{
 			Tile* SmallestF = nullptr;
 			int SmallestFPos = 0;
 
 			//Find the Tile in the open list with the smallest f value
-			for (int i = 0; i < OpenList.size; ++i)
+			for (int i = 0; i < OpenList.size(); ++i)
 			{
 				Tile * t = OpenList[i];
 
@@ -157,37 +194,55 @@ public:
 			OpenList.erase(OpenList.begin() + SmallestFPos);
 
 			vector<Tile*> Neighbors;
-			//Add if not blocked
-			Neighbors.push_back(&Map[(SmallestF->y - 1) * MapWidth + (SmallestF->x)]);
-			Neighbors.push_back(&Map[(SmallestF->y + 1) * MapWidth + (SmallestF->x)]);
-			Neighbors.push_back(&Map[(SmallestF->y) * MapWidth + (SmallestF->x - 1)]);
-			Neighbors.push_back(&Map[(SmallestF->y) * MapWidth + (SmallestF->x + 1)]);
+			Tile* Above = &Map[(SmallestF->y - 1) * MapWidth + (SmallestF->x)];
+			Tile* Below = &Map[(SmallestF->y + 1) * MapWidth + (SmallestF->x)];
+			Tile* Left = &Map[(SmallestF->y) * MapWidth + (SmallestF->x - 1)];
+			Tile* Right = &Map[(SmallestF->y) * MapWidth + (SmallestF->x + 1)];
+
+
+			if (Above->state != BLOCKED && Above->y < SmallestF->y) Neighbors.push_back(Above);
+			if (Below->state != BLOCKED && Below->y > SmallestF->y) Neighbors.push_back(Below);
+			if (Left->state != BLOCKED && Left->x < SmallestF->x) Neighbors.push_back(Left);
+			if (Right->state != BLOCKED && Right->x > SmallestF->x) Neighbors.push_back(Right);
 
 			for (Tile* t : Neighbors)
 			{
-				/*i) if successor is the goal, stop search
-          successor.g = q.g + distance between 
-                              successor and q
-          successor.h = distance from goal to 
-          successor (This can be done using many 
-          ways, we will discuss three heuristics- 
-          Manhattan, Diagonal and Euclidean 
-          Heuristics)
-          
-          successor.f = successor.g + successor.h
+				//If neighbor is the goal
+				if (t->x == EndTile->x && t->y == EndTile->y)
+				{
+					t->parent = SmallestF;
+					vector<Tile*> Path;
+					Tile* itr = EndTile;
+					
+					while (itr != nullptr)
+					{
+						Path.push_back(itr);
+						itr = itr->parent;
+					}
+					std::reverse(Path.begin(), Path.end());
+					DrawPath(Path);
+					return Path;
+				}
+				//Else if the neighbor is not in the closed list
+				else if (std::find(ClosedList.begin(), ClosedList.end(), t) == ClosedList.end())
+				{
+					t->g = SmallestF->g + 1;
+					t->h = GetDistance(EndTile, t);
+					int NewF = t->g + t->h;
 
-        ii) if a node with the same position as 
-            successor is in the OPEN list which has a 
-           lower f than successor, skip this successor
-
-        iii) if a node with the same position as 
-            successor  is in the CLOSED list which has
-            a lower f than successor, skip this successor
-            otherwise, add  the node to the open list*/
+					
+					if (t->f > NewF)
+					{
+						OpenList.push_back(t);
+						t->f = NewF;
+						t->parent = SmallestF;
+					}
+				}
 			}
 
 			ClosedList.push_back(SmallestF);
 		}
+		return vector<Tile*>();
 	}
 };
 
