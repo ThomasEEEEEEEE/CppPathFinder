@@ -25,6 +25,7 @@ public:
 		h = 0;
 		f = INT_MAX;
 		parent = nullptr;
+		ChangedThisStreak = false;
 	}
 	TileState state;
 	int x;
@@ -33,6 +34,7 @@ public:
 	int h;
 	int f;
 	Tile* parent;
+	bool ChangedThisStreak;
 };
 
 class Finder : public olc::PixelGameEngine
@@ -52,6 +54,7 @@ public:
 	Tile * StartTile = nullptr;
 	Tile * EndTile = nullptr;
 	vector<Tile> Map;
+	TileState StreakState = PATHED; //When a streak occurs, only allow changing one state to another
 
 	bool OnUserCreate() override
 	{
@@ -92,19 +95,42 @@ public:
 				}
 			}
 		}
-		else if (GetMouse(0).bPressed)
+		else if (GetMouse(0).bHeld)
 		{
 			int index = (GetMouseY() / TileSize) * MapWidth + (GetMouseX() / TileSize);
 
-			if (Map[index].state == EMPTY || Map[index].state == PATHED)
-				Map[index].state = BLOCKED;
-			else if (Map[index].state == BLOCKED)
-				Map[index].state = EMPTY;
-
-			if (StartTile && EndTile)
+			if (GetMouse(0).bPressed)
 			{
-				DoAStar();
+				StreakState = Map[index].state;
 			}
+
+			if (!Map[index].ChangedThisStreak)
+			{
+				if ((Map[index].state == EMPTY || Map[index].state == PATHED) && StreakState != BLOCKED)
+				{
+					Map[index].state = BLOCKED;
+					Map[index].ChangedThisStreak = true;
+				}
+				else if (Map[index].state == BLOCKED && StreakState != EMPTY)
+				{
+					Map[index].state = EMPTY;
+					Map[index].ChangedThisStreak = true;
+				}
+
+				if (StartTile && EndTile)
+				{
+					DoAStar();
+				}
+			}
+		}
+
+		if (GetMouse(0).bReleased)
+		{
+			for (int i = 0; i < MapWidth * MapHeight; ++i)
+			{
+				Map[i].ChangedThisStreak = false;
+			}
+			StreakState = PATHED;
 		}
 
 		for (int i = 0; i < MapWidth; ++i)
@@ -194,16 +220,21 @@ public:
 			OpenList.erase(OpenList.begin() + SmallestFPos);
 
 			vector<Tile*> Neighbors;
-			Tile* Above = &Map[(SmallestF->y - 1) * MapWidth + (SmallestF->x)];
-			Tile* Below = &Map[(SmallestF->y + 1) * MapWidth + (SmallestF->x)];
-			Tile* Left = &Map[(SmallestF->y) * MapWidth + (SmallestF->x - 1)];
-			Tile* Right = &Map[(SmallestF->y) * MapWidth + (SmallestF->x + 1)];
+			Tile* Above = nullptr;
+			Tile* Below = nullptr;
+			Tile* Left = nullptr;
+			Tile* Right = nullptr;
+
+			if (SmallestF->y > 0) Above = &Map[(SmallestF->y - 1) * MapWidth + (SmallestF->x)];
+			if (SmallestF->y < MapHeight - 1) Below = &Map[(SmallestF->y + 1) * MapWidth + (SmallestF->x)];
+			if (SmallestF->x > 0) Left = &Map[(SmallestF->y) * MapWidth + (SmallestF->x - 1)];
+			if (SmallestF->x < MapWidth - 1) Right = &Map[(SmallestF->y) * MapWidth + (SmallestF->x + 1)];
 
 
-			if (Above->state != BLOCKED && Above->y < SmallestF->y) Neighbors.push_back(Above);
-			if (Below->state != BLOCKED && Below->y > SmallestF->y) Neighbors.push_back(Below);
-			if (Left->state != BLOCKED && Left->x < SmallestF->x) Neighbors.push_back(Left);
-			if (Right->state != BLOCKED && Right->x > SmallestF->x) Neighbors.push_back(Right);
+			if (Above && Above->state != BLOCKED && Above->y < SmallestF->y) Neighbors.push_back(Above);
+			if (Below && Below->state != BLOCKED && Below->y > SmallestF->y) Neighbors.push_back(Below);
+			if (Left && Left->state != BLOCKED && Left->x < SmallestF->x) Neighbors.push_back(Left);
+			if (Right && Right->state != BLOCKED && Right->x > SmallestF->x) Neighbors.push_back(Right);
 
 			for (Tile* t : Neighbors)
 			{
