@@ -1,3 +1,21 @@
+/**********************************************************
+* Author: Thomas Eberhart (ThomasEEEEEEEE)
+* 
+* Description: This application shows off the A* algorithm. 
+* The user is shown a grid of tiles. They can place a start tile, 
+* an end tile, or an obstacle anywhere on the grid. Every time a 
+* new tile is placed, the algorithm will find the shortest path
+* between the start and end tiles and display it.
+* 
+* Left clicking on a tile will place an obstacle. 
+* Left clicking while holding CTRL on a tile will place the start tile. 
+* Right clicking while holding CTRL on a tile will place the end tile.
+* 
+* Note: The code for this program commonly refers to something
+* that I dubbed a "streak". In this context, a streak is when
+* the mouse is held down and numerous tiles are placed in one
+* "streak" of the mouse.
+**********************************************************/
 #define OLC_PGE_APPLICATION
 #include <vector>
 #include <algorithm>
