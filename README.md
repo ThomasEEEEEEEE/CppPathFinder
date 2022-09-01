@@ -5,5 +5,7 @@ Left clicking on a tile will place an obstacle.
 Left clicking while holding CTRL on a tile will place the start tile.
 Right clicking while holding CTRL on a tile will place the end tile.
 
+![](https://github.com/ThomasEEEEEEEE/CppPathFinder/blob/master/Examples/PathFinder.gif)
+
 This application is made using OneLoneCoder's olcPixelGameEngine. 
 https://github.com/OneLoneCoder/olcPixelGameEngine 
